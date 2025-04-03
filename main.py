@@ -1,5 +1,3 @@
-#pip install python-chess
-
 import chess
 import chess.svg
 import time
@@ -13,22 +11,29 @@ moves_black = pd.read_csv('black.csv.gz', compression='gzip')
 moves_white = pd.read_csv('white.csv.gz', compression='gzip')
 openings = pd.read_csv('openings.csv.gz', compression='gzip')
 
-# ------------------------------------------------------------------------------
-# MoveBook: Provides a list of opening names and move sequences as well as moves from Magnus Carlsen games based on the agent's color.
-# ------------------------------------------------------------------------------
-
 class MoveBook:
     """
-    Provides a repository of chess opening sequences and moves from Magnus Carlsen's games based on the agent's color.
+    MoveBook class that provides a repository of chess opening sequences and moves from Magnus Carlsen's games based on the agent's color.
     It handles opening book lookups and processing of ECO (Encyclopedia of Chess Openings) codes.
 
-    Parameters
+    Attributes
     ----------
     moves_white: DataFrame containing move sequences from white's perspective
     moves_black: DataFrame containing move sequences from black's perspective
     openings: Dictionary of chess openings converted from ECO codes
 
-    
+    Methods
+    ----------
+    __init__()
+        Initializes the MoveBook with dataframes for white moves, black moves, and openings
+    _convert_ecocodes_to_dict()
+        Converts ECO openings DataFrame into a structured dictionary
+    get_opening_moves()
+        Retrieves opening moves for a given ECO code and player color
+    get_magnus_moves()
+        Returns moves from a randomly chosen Magnus Carlsen game based on player color
+    get_response_to_position()
+        Attempts to find a move that responds to the current board position
 
     """
     def __init__(self, moves_white: pd.DataFrame, moves_black: pd.DataFrame, openings: pd.DataFrame):
@@ -78,24 +83,94 @@ class MoveBook:
         Returns a list of moves (in SAN notation) for a randomly chosen game
         from Magnus Carlsen’s games. For white, it takes even–indexed moves;
         for black, odd–indexed moves.
-        """
-        if color == chess.WHITE:
-            chosen_row = self.moves_white.sample(n=1).iloc[0]
-        else:
-            chosen_row = self.moves_black.sample(n=1).iloc[0]
-        move_sequence = chosen_row['move_sequence']
-        if '|' in move_sequence:
-            full_moves = move_sequence.split('|')
-        else:
-            full_moves = move_sequence.split()
-        return full_moves[0::2] if color == chess.WHITE else full_moves[1::2]
 
-# ------------------------------------------------------------------------------
-# ChessAgent: Advanced agent that uses an opening book then an iterative deepening
-# search with alpha–beta pruning. It obeys a 0.1s delay and 10s move limit.
-# ------------------------------------------------------------------------------
+        Returns an empty list if there's an error parsing the move sequence.
+        """
+        try: # Added "try" for error handling.
+            if color == chess.WHITE:
+                chosen_row = self.moves_white.sample(n=1).iloc[0]
+            else:
+                chosen_row = self.moves_black.sample(n=1).iloc[0]
+            move_sequence = chosen_row['move_sequence']
+            if '|' in move_sequence:
+                full_moves = move_sequence.split('|')
+            else:
+                full_moves = move_sequence.split()
+            return full_moves[0::2] if color == chess.WHITE else full_moves[1::2]
+        except Exception as e: # Added exception for error handling.
+            print(f"Error processing Magnus game: {e}")
+            return []  # Return empty list on error
+
+def get_response_to_position(self, board: chess.Board, color: bool) -> chess.Move: #Added to attempt to fix errors
+        """
+        New method: Try to find a move from the database that responds to the current position.
+        This is a fallback when direct move sequence doesn't work.
+        """
+        try:
+            # Sample multiple games to increase chances of finding a matching position
+            sample_size = min(20, len(self.moves_white if color == chess.WHITE else self.moves_black))
+            sample_rows = (self.moves_white if color == chess.WHITE else self.moves_black).sample(n=sample_size)
+            
+            # Try each game in the sample
+            for _, row in sample_rows.iterrows():
+                move_sequence = row['move_sequence']
+                if '|' in move_sequence:
+                    full_moves = move_sequence.split('|')
+                else:
+                    full_moves = move_sequence.split()
+                
+                # Set up a test board to find positions that match our current board
+                test_board = chess.Board()
+                for i, move_san in enumerate(full_moves):
+                    try:
+                        move = test_board.parse_san(move_san)
+                        test_board.push(move)
+                        
+                        # If we find a matching position and it's our turn
+                        if test_board.board_fen() == board.board_fen() and test_board.turn == color:
+                            # Get the next move from this sequence if available
+                            if i + 1 < len(full_moves):
+                                next_move_san = full_moves[i + 1]
+                                move = board.parse_san(next_move_san)
+                                if move in board.legal_moves:
+                                    return move
+                    except Exception:
+                        # Skip errors and continue trying moves
+                        break
+            
+            return None  # No matching position found
+        except Exception as e:
+            print(f"Error in get_response_to_position: {e}")
+            return None
 
 class ChessAgent:
+    """
+    ChessAgent class provides Advanced chess-playing agent that uses opening books and iterative deepening search with alpha-beta pruning.
+    It obeys time constraints with a 0.1s delay and 10s move limit.
+
+    Attributes
+    ----------
+    color: Boolean indicating the agent's color (True for white, False for black)
+    move_book: Reference to the MoveBook object for opening moves
+    test_opening_moves: List of moves from a test opening
+    magnus_moves: List of moves from Magnus Carlsen's games
+    opening_moves_played: Counter tracking moves played from the test opening
+    magnus_moves_played: Counter tracking moves played from Magnus' games
+
+    Methods
+    ----------
+    __init__()
+        Initializes the agent with a color and optional move book
+    select_move()
+        Selects the best move using prioritized strategies
+    alpha_beta_search()
+        Performs alpha-beta pruning search
+    evaluate()
+        Evaluates board positions
+    is_move_legal()
+        New helper method to check if a move is legal
+
+    """
     def __init__(self, color: bool, move_book: MoveBook = None, test_opening_code: str = None):
         self.color = color
         self.move_book = move_book
@@ -105,7 +180,17 @@ class ChessAgent:
         self.magnus_moves = move_book.get_magnus_moves(color)
         self.opening_moves_played = 0  # Track moves played from the test opening
         self.magnus_moves_played = 0   # Track moves played from Magnus’ games
+        self.failed_moves_count = 0    # Track consecutive failed moves to avoid repeated errors - added for error handling
 
+    def is_move_legal(self, board: chess.Board, move_san: str) -> chess.Move: # Added for error handling
+            """Helper method to check if a move in SAN notation is legal and return the Move object"""
+            try:
+                move = board.parse_san(move_san)
+                if move in board.legal_moves:
+                    return move
+                return None
+            except Exception:
+                return None
 
     def select_move(self, board: chess.Board, time_limit: float = 10.0) -> chess.Move:
         # Fixed 0.1 second delay.
@@ -429,11 +514,28 @@ class ChessAgent:
                     score -= 20 # Otherwise, if our king is in check, subtract.
         return score
 
-# ------------------------------------------------------------------------------
-# Match: Schedules and renders a game between two agents.
-# ------------------------------------------------------------------------------
-
 class Match:
+    """
+    Match class manages a chess match between two agents, including scheduling moves, tracking time, and rendering the game state.
+
+    Parameters
+    ----------
+    white_agent: The ChessAgent playing white
+    black_agent: The ChessAgent playing black
+    board: The chess.Board object representing the current game state
+    white_clock: Time remaining for the white player (in seconds)
+    black_clock: Time remaining for the black player (in seconds)
+
+    Methods
+    ----------
+    __init__()
+        Initializes a match between two agents
+    render()
+        Displays the current board state using SVG
+    play()
+        Runs the match until completion, managing turns and time controls
+
+    """
     def __init__(self, white_agent: ChessAgent, black_agent: ChessAgent):
         self.white_agent = white_agent
         self.black_agent = black_agent
@@ -486,13 +588,13 @@ class Match:
         return result
 
 # ------------------------------------------------------------------------------
-# Main Execution (Run the Game)
+# Main Execution Block
 # ------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     
     # Define the test opening code you wish to use (must match the ECO code, e.g. "A01")
-    test_opening_code = "A01"
+    test_opening_code = "C34" # King's Gambit Accepted
 
     # Initialize the opening book with the appropriate dataframes.
     move_book = MoveBook(moves_white, moves_black, openings)
@@ -501,6 +603,6 @@ if __name__ == '__main__':
     white_agent = ChessAgent(chess.WHITE, move_book, test_opening_code=test_opening_code)
     black_agent = ChessAgent(chess.BLACK, move_book)  # Black could use Magnus’ moves
 
-    # Play Game with Kaggle Rendering
+    # Play Game
     match = Match(white_agent, black_agent)
     match.play()
