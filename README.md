@@ -1,6 +1,6 @@
 # Building and efficient chess playing bot
 
-Tags: `Strategy`, `Alpha-beta pruning`, `Ethereum`, `Time-series`.
+Tags: `Strategy`, `Alpha-beta pruning`, `Chess`, `Agent`, `Efficient`.
 
 ## Project Overview
 
@@ -18,7 +18,7 @@ Tags: `Strategy`, `Alpha-beta pruning`, `Ethereum`, `Time-series`.
 
 ## Dataset Description
 
-**Source:** The shared dataset used 'Magnus Carlsen Complete Chess Games 2001-2022' from Kaggle as source. This dataset, is public, and is available at the following link: [https://www.kaggle.com/datasets/zq1200/magnus-carlsen-complete-chess-games-20012022]. You can obtain the transformed version from the gzip-compressed CSV files within the repository.
+**Source:** The dataset used was'Magnus Carlsen Complete Chess Games 2001-2022' from Kaggle as source. This dataset, is public, and is available at the following link: [https://www.kaggle.com/datasets/zq1200/magnus-carlsen-complete-chess-games-20012022]. You can obtain the transformed version from the gzip-compressed CSV files within the repository.
 
 <!---
 [data folder here](./data).
@@ -31,6 +31,14 @@ Tags: `Strategy`, `Alpha-beta pruning`, `Ethereum`, `Time-series`.
 
 ## To Reproduce
 
-**Codebase:** Complete script for playing a game with the bot is available in this repository.
+**Codebase:** The code can be split in four different python scripts and one notebook which you can use to visualize the chess game using SVG rendering:
 
-**Documentation:** The script is documented with very clear comments, guiding the main ideas behind each of the important lines and structures.
+- move_book.py: provides a repository of chess opening sequences and moves from Magnus Carlsen's games based on the color of the pieces played. Also handles processing of ECO (Encyclopedia of Chess Openings) codes.
+
+- chess_agent.py: provides the advanced chess-playing agent position evaluation and move selection using the MoveBook as well as iterative deepening search with alpha-beta pruning.
+
+- match.py: manages a chess match between two agents, including scheduling moves, tracking time, and rendering the game state.
+
+- chessbot.ipynb: provides the preparation of the final dataset (black.csv.gz, white.csv.gz) from the initial data sourced from Kaggle as well as a visual representation of the chess board with the pieces moving.
+
+**Documentation:** All the scripts are documented with very clear comments, guiding the main ideas behind each of the important lines and structures.
