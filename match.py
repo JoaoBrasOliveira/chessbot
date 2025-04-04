@@ -6,6 +6,7 @@ from move_book import MoveBook
 from chess_agent import ChessAgent
 import pandas as pd
 import sys
+import os
 import unittest
 from tests import TestChessAgent, TestMoveBook, TestMatch # Import test cases
 
@@ -42,8 +43,9 @@ class Match:
         # Render the board as SVG for Kaggle Environment Rendering.
         clear_output(wait=True)
         display(SVG(chess.svg.board(board=self.board)))
-        print("White clock: {self.white_clock:.2f}s, Black clock: {self.black_clock:.2f}s")
-
+        print("White clock: {:.2f}s, Black clock: {:.2f}s".format(
+            self.white_clock, self.black_clock))
+    
     def play(self):
         while not self.board.is_game_over():
             # Determine which agent is to move and get their remaining time.
@@ -83,10 +85,14 @@ if __name__ == '__main__':
         unittest.main(argv=[''], exit=False)
     
     else:
-        # Read the gzip-compressed CSV file
-        moves_black = pd.read_csv('black.csv.gz', compression='gzip')
-        moves_white = pd.read_csv('white.csv.gz', compression='gzip')
-        openings = pd.read_csv('openings.csv.gz', compression='gzip')
+        # Read the gzip-compressed files
+        
+        # Define the path to the "data" folder relative to the script's directory
+        data_folder = os.path.join(os.path.dirname(__file__), 'data')
+
+        moves_black = pd.read_csv(os.path.join(data_folder, 'black.csv.gz'), compression='gzip')
+        moves_white = pd.read_csv(os.path.join(data_folder, 'white.csv.gz'), compression='gzip')
+        openings = pd.read_csv(os.path.join(data_folder, 'openings.csv.gz'), compression='gzip')
 
         # Define the test opening code you wish to use (must match the ECO code, e.g. "A01")
         test_opening_code = "C34" # King's Gambit Accepted
